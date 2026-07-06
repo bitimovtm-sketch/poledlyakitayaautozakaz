@@ -1,66 +1,108 @@
-import html
-import os
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Настройка поля</title>
+  <script src="//api.bitrix24.com/api/v1/"></script>
+</head>
+<body style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
+  <h3>Настройка поля «Форматированный текст»</h3>
+  <div id="status"></div>
 
-import requests
-from flask import Flask, jsonify, render_template, request
+  <script>
+    var USER_TYPE_ID = 'richtext';
+    var HANDLER_URL = window.location.origin + '/field';
 
-app = Flask(__name__)
+    function log(text) {
+      document.getElementById('status').innerHTML += '<div>' + text + '</div>';
+    }
 
-# Входящий вебхук портала, куда пишем итоговое значение поля.
-# Пример: https://autozakaz.bitrix24.ru/rest/1/xxxxxxxxxxxxxxxx/
-INCOMING_WEBHOOK = os.environ["INCOMING_WEBHOOK"]
+    function safeError(result) {
+      var err = result.error();
+      if (err && typeof err.ex === 'object' && err.ex !== null) {
+        return (err.ex.error || '') + ': ' + (err.ex.error_description || '');
+      }
+      try { return JSON.stringify(err); } catch (e) { return String(err); }
+    }
 
-# Код поля сделки, в которое пишем текст, например UF_CRM_1789999999999
-FIELD_CODE = os.environ["FIELD_CODE"]
+    BX24.init(function () {
+      // Шаг 1: проверяем установку — по чек-листу Bitrix24 INSTALLED должен быть true
+      BX24.callMethod('app.info', {}, function (appInfoResult) {
+        if (appInfoResult.error()) {
+          log('Ошибка app.info: ' + safeError(appInfoResult));
+          return;
+        }
+        var appInfo = appInfoResult.data();
+        var appId = appInfo.ID;
+        log('APP ID = ' + appId + ', INSTALLED = ' + appInfo.INSTALLED);
 
+        if (String(appInfo.INSTALLED) !== 'true' && appInfo.INSTALLED !== true) {
+          log('Приложение ещё не установлено до конца. Закрой это окно и открой приложение заново ' +
+              '(или нажми «Переустановить» в настройках приложения).');
+          return;
+        }
 
-def text_to_html(text: str) -> str:
-    """Обычный текст -> безопасный HTML с абзацами и переносами строк."""
-    escaped = html.escape(text)
-    paragraphs = escaped.split("\n\n")
-    return "".join(
-        "<p>{}</p>".format(p.replace("\n", "<br>"))
-        for p in paragraphs
-        if p.strip()
-    )
+        // Шаг 2: регистрируем тип поля (повторная регистрация даст ошибку — это нормально)
+        BX24.callMethod('userfieldtype.add', {
+          USER_TYPE_ID: USER_TYPE_ID,
+          HANDLER: HANDLER_URL,
+          TITLE: 'Форматированный текст',
+          DESCRIPTION: 'Текст с сохранением абзацев и форматирования'
+        }, function (typeResult) {
+          if (typeResult.error()) {
+            log('userfieldtype.add: ' + safeError(typeResult) + ' — если тип уже есть, это не страшно.');
+          } else {
+            log('Тип поля зарегистрирован.');
+          }
 
+          // Шаг 3: подтверждаем регистрацию типа
+          BX24.callMethod('userfieldtype.list', {}, function (listResult) {
+            if (listResult.error()) {
+              log('Ошибка userfieldtype.list: ' + safeError(listResult));
+              return;
+            }
+            var types = listResult.data() || [];
+            var found = types.some(function (t) { return t.USER_TYPE_ID === USER_TYPE_ID; });
+            if (!found) {
+              log('Тип "' + USER_TYPE_ID + '" не найден. Зарегистрированные типы: ' + JSON.stringify(types));
+              return;
+            }
+            log('Тип "' + USER_TYPE_ID + '" подтверждён.');
 
-@app.route("/install", methods=["GET", "POST"])
-def install():
-    """Страница мастера установки локального приложения (открывается один раз)."""
-    return render_template("install.html")
+            var fullTypeId = 'rest_' + appId + '_' + USER_TYPE_ID;
 
+            // Шаг 4: создаём поле на сделках
+            BX24.callMethod('crm.deal.userfield.add', {
+              fields: {
+                LABEL: 'Описание (форматированное)',
+                FIELD_NAME: 'RICH_DESCRIPTION',
+                USER_TYPE_ID: fullTypeId,
+                MULTIPLE: 'N',
+                MANDATORY: 'N'
+              }
+            }, function (fieldResult) {
+              if (fieldResult.error()) {
+                log('crm.deal.userfield.add: ' + safeError(fieldResult) + ' — если поле уже создано, это не страшно.');
+              } else {
+                log('<b>Готово! Поле создано. Код поля: UF_CRM_RICH_DESCRIPTION</b>');
+              }
 
-@app.route("/field", methods=["GET", "POST"])
-def field():
-    """HANDLER пользовательского типа поля — отображается внутри карточки CRM."""
-    return render_template("field.html")
-
-
-@app.route("/set-text", methods=["POST"])
-def set_text():
-    """Принимает { deal_id, text } и пишет отформатированный HTML в поле сделки."""
-    data = request.get_json(force=True, silent=True) or request.form
-    deal_id = data.get("deal_id")
-    text = data.get("text")
-
-    if not deal_id or text is None:
-        return jsonify({"error": "deal_id and text are required"}), 400
-
-    value = text_to_html(text)
-
-    resp = requests.post(
-        INCOMING_WEBHOOK.rstrip("/") + "/crm.deal.update",
-        json={"id": deal_id, "fields": {FIELD_CODE: value}},
-        timeout=10,
-    )
-    return jsonify(resp.json())
-
-
-@app.route("/health", methods=["GET", "POST"])
-def health():
-    return "ok"
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+              // Шаг 5: показываем точный код поля из списка
+              BX24.callMethod('crm.deal.userfield.list', {
+                filter: { FIELD_NAME: 'UF_CRM_RICH_DESCRIPTION' }
+              }, function (ufListResult) {
+                if (!ufListResult.error()) {
+                  var items = ufListResult.data() || [];
+                  if (items.length > 0) {
+                    log('<b>Код поля для Railway (FIELD_CODE): ' + items[0].FIELD_NAME + '</b>');
+                  }
+                }
+              });
+            });
+          });
+        });
+      });
+    });
+  </script>
+</body>
+</html>
