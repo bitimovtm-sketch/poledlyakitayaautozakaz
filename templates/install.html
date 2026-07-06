@@ -17,13 +17,25 @@
       el.innerHTML += '<div>' + text + '</div>';
     }
 
+    function safeError(result) {
+      var err = result.error();
+      if (err && typeof err.ex === 'object' && err.ex !== null) {
+        return (err.ex.error || '') + ': ' + (err.ex.error_description || JSON.stringify(err.ex.error || ''));
+      }
+      try {
+        return JSON.stringify(err);
+      } catch (e) {
+        return String(err);
+      }
+    }
+
     BX24.init(function () {
       log('BX24 инициализирован. Проверяю установку приложения...');
 
       // Шаг 1: проверяем, что приложение установлено (по чек-листу Bitrix24)
       BX24.callMethod('app.info', {}, function (appInfoResult) {
         if (appInfoResult.error()) {
-          log('Ошибка app.info: ' + JSON.stringify(appInfoResult.error()));
+          log('Ошибка app.info: ' + safeError(appInfoResult));
           return;
         }
 
@@ -39,7 +51,7 @@
           DESCRIPTION: 'Текст с сохранением абзацев и форматирования'
         }, function (typeResult) {
           if (typeResult.error()) {
-            log('userfieldtype.add: ' + JSON.stringify(typeResult.error()) +
+            log('userfieldtype.add: ' + safeError(typeResult) +
               ' (если тип уже зарегистрирован — это нормально, продолжаю)');
           } else {
             log('Тип поля зарегистрирован.');
@@ -48,7 +60,7 @@
           // Шаг 3: сверяем, что тип реально зарегистрирован — через userfieldtype.list
           BX24.callMethod('userfieldtype.list', {}, function (listResult) {
             if (listResult.error()) {
-              log('Ошибка userfieldtype.list: ' + JSON.stringify(listResult.error()));
+              log('Ошибка userfieldtype.list: ' + safeError(listResult));
               BX24.installFinish();
               return;
             }
@@ -81,7 +93,7 @@
               }
             }, function (fieldResult) {
               if (fieldResult.error()) {
-                log('Поле не создано: ' + JSON.stringify(fieldResult.error()) +
+                log('Поле не создано: ' + safeError(fieldResult) +
                   ' (если поле уже существует — это нормально)');
               } else {
                 log('Готово! ID поля: ' + fieldResult.data() +
