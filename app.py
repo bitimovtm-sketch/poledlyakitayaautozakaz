@@ -57,7 +57,7 @@ def set_text():
     return jsonify(resp.json())
 
 
-@app.route("/health")
+@app.route("/health", methods=["GET", "POST"])
 def health():
     return "ok"
 
