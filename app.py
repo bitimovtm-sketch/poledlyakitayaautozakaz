@@ -25,13 +25,13 @@ def text_to_html(text: str) -> str:
     )
 
 
-@app.route("/install")
+@app.route("/install", methods=["GET", "POST"])
 def install():
     """Страница мастера установки локального приложения (открывается один раз)."""
     return render_template("install.html")
 
 
-@app.route("/field")
+@app.route("/field", methods=["GET", "POST"])
 def field():
     """HANDLER пользовательского типа поля — отображается внутри карточки CRM."""
     return render_template("field.html")
