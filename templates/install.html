@@ -5,105 +5,15 @@
   <title>Установка приложения</title>
   <script src="//api.bitrix24.com/api/v1/"></script>
 </head>
-<body style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
-  <div id="status">Устанавливаю...</div>
-
+<body style="font-family: sans-serif; padding: 20px;">
+  <div>Завершаю установку...</div>
   <script>
-    var USER_TYPE_ID = 'richtext';
-    var HANDLER_URL = window.location.origin + '/field';
-
-    function log(text) {
-      var el = document.getElementById('status');
-      el.innerHTML += '<div>' + text + '</div>';
-    }
-
-    function safeError(result) {
-      var err = result.error();
-      if (err && typeof err.ex === 'object' && err.ex !== null) {
-        return (err.ex.error || '') + ': ' + (err.ex.error_description || JSON.stringify(err.ex.error || ''));
-      }
-      try {
-        return JSON.stringify(err);
-      } catch (e) {
-        return String(err);
-      }
-    }
-
+    // По документации Bitrix24: пока не вызван BX24.installFinish(),
+    // приложение считается не установленным (INSTALLED = false),
+    // и часть методов REST возвращает 401.
+    // Поэтому здесь только завершаем установку. Вся настройка — на главной странице приложения.
     BX24.init(function () {
-      log('BX24 инициализирован. Проверяю установку приложения...');
-
-      // Шаг 1: проверяем, что приложение установлено (по чек-листу Bitrix24)
-      BX24.callMethod('app.info', {}, function (appInfoResult) {
-        if (appInfoResult.error()) {
-          log('Ошибка app.info: ' + safeError(appInfoResult));
-          return;
-        }
-
-        var appInfo = appInfoResult.data();
-        var appId = appInfo.ID;
-        log('app.info OK. APP ID = ' + appId + ', INSTALLED = ' + appInfo.INSTALLED);
-
-        // Шаг 2: регистрируем тип поля
-        BX24.callMethod('userfieldtype.add', {
-          USER_TYPE_ID: USER_TYPE_ID,
-          HANDLER: HANDLER_URL,
-          TITLE: 'Форматированный текст',
-          DESCRIPTION: 'Текст с сохранением абзацев и форматирования'
-        }, function (typeResult) {
-          if (typeResult.error()) {
-            log('userfieldtype.add: ' + safeError(typeResult) +
-              ' (если тип уже зарегистрирован — это нормально, продолжаю)');
-          } else {
-            log('Тип поля зарегистрирован.');
-          }
-
-          // Шаг 3: сверяем, что тип реально зарегистрирован — через userfieldtype.list
-          BX24.callMethod('userfieldtype.list', {}, function (listResult) {
-            if (listResult.error()) {
-              log('Ошибка userfieldtype.list: ' + safeError(listResult));
-              BX24.installFinish();
-              return;
-            }
-
-            var types = listResult.data();
-            var found = types.some(function (t) {
-              return t.USER_TYPE_ID === USER_TYPE_ID;
-            });
-
-            if (!found) {
-              log('ВНИМАНИЕ: тип "' + USER_TYPE_ID + '" не найден в userfieldtype.list. ' +
-                'Список зарегистрированных типов: ' + JSON.stringify(types));
-              BX24.installFinish();
-              return;
-            }
-
-            log('Тип "' + USER_TYPE_ID + '" подтверждён в userfieldtype.list.');
-
-            var fullTypeId = 'rest_' + appId + '_' + USER_TYPE_ID;
-            log('Создаю поле с USER_TYPE_ID = ' + fullTypeId);
-
-            // Шаг 4: создаём само поле на сделках
-            BX24.callMethod('crm.deal.userfield.add', {
-              fields: {
-                LABEL: 'Описание (форматированное)',
-                FIELD_NAME: 'RICH_DESCRIPTION',
-                USER_TYPE_ID: fullTypeId,
-                MULTIPLE: 'N',
-                MANDATORY: 'N'
-              }
-            }, function (fieldResult) {
-              if (fieldResult.error()) {
-                log('Поле не создано: ' + safeError(fieldResult) +
-                  ' (если поле уже существует — это нормально)');
-              } else {
-                log('Готово! ID поля: ' + fieldResult.data() +
-                  '. Точный код (UF_CRM_...) смотри в настройках поля сделки или методом crm.deal.userfield.list.');
-              }
-              BX24.installFinish();
-            });
-          });
-        });
-      });
+      BX24.installFinish();
     });
   </script>
 </body>
