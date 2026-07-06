@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Установка приложения</title>
+  <script src="//api.bitrix24.com/api/v1/"></script>
+</head>
+<body style="font-family: sans-serif; padding: 20px;">
+  <div id="status">Устанавливаю...</div>
+
+  <script>
+    // Уникальный код нашего типа поля (латиница/цифры/подчёркивание)
+    var USER_TYPE_ID = 'rich_text';
+    // Куда Bitrix24 будет стучаться при открытии карточки с этим полем
+    var HANDLER_URL = window.location.origin + '/field';
+
+    function setStatus(text) {
+      document.getElementById('status').innerText = text;
+    }
+
+    BX24.init(function () {
+      // 1. Регистрируем новый тип поля (если уже зарегистрирован — просто получим ошибку, это не страшно)
+      BX24.callMethod('userfieldtype.add', {
+        USER_TYPE_ID: USER_TYPE_ID,
+        HANDLER: HANDLER_URL,
+        TITLE: 'Форматированный текст',
+        DESCRIPTION: 'Текст с сохранением абзацев и форматирования'
+      }, function () {
+        // 2. Получаем ID приложения — он нужен для полного кода типа поля
+        BX24.callMethod('app.info', {}, function (appInfoResult) {
+          var appId = appInfoResult.data().ID;
+          var fullTypeId = 'rest_' + appId + '_' + USER_TYPE_ID;
+
+          // 3. Создаём само поле на сделках
+          BX24.callMethod('crm.deal.userfield.add', {
+            fields: {
+              LABEL: 'Описание (форматированное)',
+              FIELD_NAME: 'RICH_DESCRIPTION',
+              USER_TYPE_ID: fullTypeId,
+              MULTIPLE: 'N',
+              MANDATORY: 'N'
+            }
+          }, function (fieldResult) {
+            if (fieldResult.error()) {
+              setStatus('Поле не создано: ' + fieldResult.error().toString() +
+                ' (если поле уже существует — это нормально, можно продолжать)');
+            } else {
+              setStatus('Готово! ID поля: ' + fieldResult.data() +
+                '. Точный код поля (UF_CRM_...) посмотри в настройках карточки сделки ' +
+                'или методом crm.deal.userfield.list — он понадобится в настройках сервиса (FIELD_CODE).');
+            }
+            BX24.installFinish();
+          });
+        });
+      });
+    });
+  </script>
+</body>
+</html>
