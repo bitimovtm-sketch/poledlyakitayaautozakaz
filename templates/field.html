@@ -8,7 +8,7 @@
     body {
       margin: 0;
       padding: 14px 16px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
       font-size: 16px;
       line-height: 1.7;
       color: #1a1a1a;
@@ -22,31 +22,15 @@
     }
     #content p { margin: 0 0 14px 0; }
     #content p:last-child { margin-bottom: 0; }
+    #content b, #content strong { color: #0b2a4a; }
     .empty { color: #9aa5b1; font-style: italic; font-size: 15px; }
-    #debug {
-      margin-top: 12px;
-      padding: 10px;
-      background: #fff8e1;
-      border: 1px dashed #e0c060;
-      border-radius: 6px;
-      font-size: 12px;
-      font-family: monospace;
-      white-space: pre-wrap;
-      word-break: break-all;
-      color: #555;
-    }
   </style>
 </head>
 <body>
   <div id="content"></div>
-  <div id="debug">debug...</div>
 
   <script>
     var FIELD_CODE = 'UF_CRM_RICH_DESCRIPTION';
-
-    function dbg(text) {
-      document.getElementById('debug').textContent += '\n' + text;
-    }
 
     function render(value) {
       var box = document.getElementById('content');
@@ -59,29 +43,20 @@
     }
 
     BX24.init(function () {
-      var info = BX24.placement.info();
-      var options = info.options || {};
-      document.getElementById('debug').textContent = 'placement: ' + info.placement;
-      dbg('options keys: ' + Object.keys(options).join(', '));
-      dbg('ENTITY_VALUE_ID: ' + options.ENTITY_VALUE_ID);
-      dbg('ID: ' + options.ID);
-      dbg('VALUE (first 80): ' + String(options.VALUE || '').slice(0, 80));
-
+      var options = BX24.placement.info().options || {};
       var dealId = options.ENTITY_VALUE_ID || options.ID;
 
       if (dealId) {
+        // Читаем свежее значение поля напрямую, чтобы не показывать кешированный VALUE
         BX24.callMethod('crm.deal.get', { id: dealId }, function (res) {
           if (res.error()) {
-            dbg('crm.deal.get ERROR: ' + JSON.stringify(res.error()));
             render(options.VALUE || '');
           } else {
             var deal = res.data() || {};
-            dbg('API returned field (first 80): ' + String(deal[FIELD_CODE] || '').slice(0, 80));
             render(deal[FIELD_CODE] || '');
           }
         });
       } else {
-        dbg('dealId пустой -> показываю VALUE');
         render(options.VALUE || '');
       }
     });
