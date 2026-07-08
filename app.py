@@ -43,12 +43,25 @@ def field():
     return render_template("field.html")
 
 
-@app.route("/set-text", methods=["POST"])
+# Имя поля для метода crm.item.update — в camelCase, без префикса UF_CRM.
+# UF_CRM_RICH_DESCRIPTION -> ufCrm_RICH_DESCRIPTION
+ITEM_FIELD_CODE = "ufCrm_RICH_DESCRIPTION"
+
+
+@app.route("/set-text", methods=["GET", "POST"])
 def set_text():
-    """Принимает { deal_id, text } и пишет отформатированный HTML в поле сделки."""
-    data = request.get_json(force=True, silent=True) or request.form
-    deal_id = data.get("deal_id")
-    text = data.get("text")
+    """Принимает deal_id и text (из GET-параметров или JSON) и пишет HTML в поле сделки.
+
+    Использует crm.item.update (не deal.update) — он легче и не упирается
+    в OPERATION_TIME_LIMIT, т.к. не тянет тяжёлый каскад обновления сделки.
+    """
+    if request.method == "GET":
+        deal_id = request.args.get("deal_id")
+        text = request.args.get("text")
+    else:
+        data = request.get_json(force=True, silent=True) or request.form
+        deal_id = data.get("deal_id")
+        text = data.get("text")
 
     if not deal_id or text is None:
         return jsonify({"error": "deal_id and text are required"}), 400
@@ -56,9 +69,13 @@ def set_text():
     value = text_to_html(text)
 
     resp = requests.post(
-        INCOMING_WEBHOOK.rstrip("/") + "/crm.deal.update",
-        json={"id": deal_id, "fields": {FIELD_CODE: value}},
-        timeout=10,
+        INCOMING_WEBHOOK.rstrip("/") + "/crm.item.update",
+        json={
+            "entityTypeId": 2,  # 2 = сделка
+            "id": deal_id,
+            "fields": {ITEM_FIELD_CODE: value},
+        },
+        timeout=15,
     )
     return jsonify(resp.json())
 
