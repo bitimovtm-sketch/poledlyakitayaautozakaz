@@ -25,12 +25,8 @@
       font-size: 16px;
       line-height: 1.7;
     }
-    #content p:last-child {
-      margin-bottom: 0;
-    }
-    #content b, #content strong {
-      color: #0b2a4a;
-    }
+    #content p:last-child { margin-bottom: 0; }
+    #content b, #content strong { color: #0b2a4a; }
     .empty {
       color: #9aa5b1;
       font-style: italic;
@@ -42,16 +38,37 @@
   <div id="content"></div>
 
   <script>
-    BX24.init(function () {
-      var options = BX24.placement.info().options;
-      var value = (options && options.VALUE) ? options.VALUE : '';
+    var FIELD_CODE = 'UF_CRM_RICH_DESCRIPTION';
+
+    function render(value) {
       var box = document.getElementById('content');
-      if (value && value.trim() !== '') {
+      if (value && String(value).trim() !== '') {
         box.innerHTML = value;
       } else {
         box.innerHTML = '<span class="empty">Нет данных</span>';
       }
       BX24.fitWindow();
+    }
+
+    BX24.init(function () {
+      var options = BX24.placement.info().options;
+      // ID текущей сделки Bitrix передаёт в опциях виджета поля
+      var dealId = options && (options.ENTITY_VALUE_ID || options.ID);
+
+      if (dealId) {
+        // Запрашиваем СВЕЖЕЕ значение поля из базы, а не кешированное options.VALUE
+        BX24.callMethod('crm.deal.get', { id: dealId }, function (res) {
+          if (res.error()) {
+            // если не удалось получить — показываем то, что пришло в VALUE
+            render(options.VALUE || '');
+          } else {
+            var deal = res.data() || {};
+            render(deal[FIELD_CODE] || '');
+          }
+        });
+      } else {
+        render(options.VALUE || '');
+      }
     });
   </script>
 </body>
