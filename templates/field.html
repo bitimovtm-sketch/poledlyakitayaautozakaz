@@ -20,9 +20,8 @@
       border-radius: 8px;
       padding: 16px 20px;
     }
-    #content p { margin: 0 0 14px 0; }
+    #content p { margin: 0 0 14px 0; font-size: 16px; line-height: 1.7; }
     #content p:last-child { margin-bottom: 0; }
-    #content b, #content strong { color: #0b2a4a; }
     .empty { color: #9aa5b1; font-style: italic; font-size: 15px; }
   </style>
 </head>
@@ -30,12 +29,35 @@
   <div id="content"></div>
 
   <script>
-    var FIELD_CODE = 'UF_CRM_RICH_DESCRIPTION';
+    // Обычное текстовое поле сделки, откуда берём текст:
+    var SOURCE_FIELD = 'UF_CRM_1783482541';
 
-    function render(value) {
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    // Обычный текст с переносами -> красивый HTML (абзацы + переносы строк)
+    function textToHtml(text) {
+      var safe = escapeHtml(text);
+      // разбиваем на абзацы по пустой строке (учитываем \r\n и \n)
+      var paragraphs = safe.split(/\n\s*\n/);
+      var htmlParts = [];
+      for (var i = 0; i < paragraphs.length; i++) {
+        var p = paragraphs[i].replace(/^\s+|\s+$/g, '');
+        if (p !== '') {
+          htmlParts.push('<p>' + p.replace(/\n/g, '<br>') + '</p>');
+        }
+      }
+      return htmlParts.join('');
+    }
+
+    function render(text) {
       var box = document.getElementById('content');
-      if (value && String(value).trim() !== '') {
-        box.innerHTML = value;
+      if (text && String(text).trim() !== '') {
+        box.innerHTML = textToHtml(text);
       } else {
         box.innerHTML = '<span class="empty">Нет данных</span>';
       }
@@ -47,17 +69,16 @@
       var dealId = options.ENTITY_VALUE_ID || options.ID;
 
       if (dealId) {
-        // Читаем свежее значение поля напрямую, чтобы не показывать кешированный VALUE
         BX24.callMethod('crm.deal.get', { id: dealId }, function (res) {
           if (res.error()) {
-            render(options.VALUE || '');
+            render('');
           } else {
             var deal = res.data() || {};
-            render(deal[FIELD_CODE] || '');
+            render(deal[SOURCE_FIELD] || '');
           }
         });
       } else {
-        render(options.VALUE || '');
+        render('');
       }
     });
   </script>
