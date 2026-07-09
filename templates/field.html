@@ -5,77 +5,118 @@
   <title>Поле</title>
   <script src="//api.bitrix24.com/api/v1/"></script>
   <style>
+    html, body { margin: 0; padding: 0; }
     body {
-      margin: 0;
-      padding: 14px 16px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
       font-size: 16px;
       line-height: 1.7;
       color: #1a1a1a;
+      padding: 8px 4px;
     }
     #content {
       background: #f7f9fc;
       border: 1px solid #e3e9f2;
       border-left: 4px solid #2fc6f6;
       border-radius: 8px;
-      padding: 16px 20px;
+      padding: 14px 18px;
     }
-    #content p { margin: 0 0 14px 0; font-size: 16px; line-height: 1.7; }
-    #content p:last-child { margin-bottom: 0; }
+    #text p { margin: 0 0 12px 0; font-size: 16px; line-height: 1.7; }
+    #text p:last-child { margin-bottom: 0; }
     .empty { color: #9aa5b1; font-style: italic; font-size: 15px; }
+
+    /* свёрнутое состояние: показываем ~3 строки */
+    #text.collapsed {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    #toggle {
+      display: inline-block;
+      margin-top: 8px;
+      color: #2f80ed;
+      cursor: pointer;
+      font-size: 14px;
+      user-select: none;
+    }
+    #toggle:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div id="content"></div>
+  <div id="content">
+    <div id="text"></div>
+    <span id="toggle" style="display:none;">Развернуть</span>
+  </div>
 
   <script>
-    // Обычное текстовое поле сделки, откуда берём текст:
     var SOURCE_FIELD = 'UF_CRM_1783482541';
 
     function escapeHtml(s) {
-      return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
-    // Обычный текст с переносами -> красивый HTML (абзацы + переносы строк)
     function textToHtml(text) {
       var safe = escapeHtml(text);
-      // разбиваем на абзацы по пустой строке (учитываем \r\n и \n)
       var paragraphs = safe.split(/\n\s*\n/);
-      var htmlParts = [];
+      var out = [];
       for (var i = 0; i < paragraphs.length; i++) {
         var p = paragraphs[i].replace(/^\s+|\s+$/g, '');
-        if (p !== '') {
-          htmlParts.push('<p>' + p.replace(/\n/g, '<br>') + '</p>');
-        }
+        if (p !== '') out.push('<p>' + p.replace(/\n/g, '<br>') + '</p>');
       }
-      return htmlParts.join('');
+      return out.join('');
+    }
+
+    function setupToggle() {
+      var textEl = document.getElementById('text');
+      var toggle = document.getElementById('toggle');
+
+      // сначала свернём и проверим, есть ли что разворачивать
+      textEl.classList.add('collapsed');
+
+      // если контент помещается в 3 строки — прячем кнопку и разворачиваем
+      if (textEl.scrollHeight <= textEl.clientHeight + 2) {
+        textEl.classList.remove('collapsed');
+        toggle.style.display = 'none';
+      } else {
+        toggle.style.display = 'inline-block';
+        toggle.textContent = 'Развернуть';
+        var expanded = false;
+        toggle.onclick = function () {
+          expanded = !expanded;
+          if (expanded) {
+            textEl.classList.remove('collapsed');
+            toggle.textContent = 'Свернуть';
+          } else {
+            textEl.classList.add('collapsed');
+            toggle.textContent = 'Развернуть';
+          }
+          BX24.fitWindow();
+        };
+      }
+      BX24.fitWindow();
     }
 
     function render(text) {
-      var box = document.getElementById('content');
+      var textEl = document.getElementById('text');
+      var toggle = document.getElementById('toggle');
       if (text && String(text).trim() !== '') {
-        box.innerHTML = textToHtml(text);
+        textEl.innerHTML = textToHtml(text);
+        // дать браузеру просчитать высоту, потом настроить сворачивание
+        setTimeout(setupToggle, 0);
       } else {
-        box.innerHTML = '<span class="empty">Нет данных</span>';
+        textEl.innerHTML = '<span class="empty">Нет данных</span>';
+        toggle.style.display = 'none';
+        BX24.fitWindow();
       }
-      BX24.fitWindow();
     }
 
     BX24.init(function () {
       var options = BX24.placement.info().options || {};
       var dealId = options.ENTITY_VALUE_ID || options.ID;
-
       if (dealId) {
         BX24.callMethod('crm.deal.get', { id: dealId }, function (res) {
-          if (res.error()) {
-            render('');
-          } else {
-            var deal = res.data() || {};
-            render(deal[SOURCE_FIELD] || '');
-          }
+          render(res.error() ? '' : ((res.data() || {})[SOURCE_FIELD] || ''));
         });
       } else {
         render('');
